@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Smart Finance Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    :root {
+      --sky: #e8f1ff;
+      --lav: #dcd6f7;
+      --mint: #b8e6d3;
+      --good: #6fcf97;
+      --warn: #f2c94c;
+      --bad: #eb5757;
+    }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(120deg, var(--sky), var(--lav));
+      margin: 0;
+      padding: 15px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: auto
+    }
+
+    h1 {
+      text-align: center
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 18px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 15px 30px rgba(0, 0, 0, .08);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px;
+    }
+
+    label {
+      font-weight: 600;
+      font-size: 14px
+    }
+
+    input,
+    select,
+    button {
+      width: 100%;
+      padding: 10px;
+      border-radius: 12px;
+      border: 1px solid #ddd;
+      margin-bottom: 10px;
+    }
+
+    button {
+      background: var(--lav);
+      font-weight: bold;
+      border: none;
+      cursor: pointer
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse
+    }
+
+    th,
+    td {
+      padding: 10px;
+      border-bottom: 1px solid #eee;
+      text-align: center
+    }
+
+    th {
+      background: #f6f6fb
+    }
+
+    .delete-btn {
+      background: #ffe0e0;
+      color: #c0392b;
+      border: none;
+      padding: 6px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1>🌸 Smart Finance Dashboard</h1>
+
+    <!-- MONTHLY SETUP -->
+    <div class="card">
+      <h3>💼 Monthly Setup</h3>
+
+      <label>Monthly Income ₹</label>
+      <input id="income" type="number">
+
+      <label>Monthly Expense Limit ₹</label>
+      <input id="limit" type="number">
+
+      <label>Total Savings ₹</label>
+      <input id="savings" type="number">
+
+      <label>Total Debt ₹</label>
+      <input id="debt" type="number">
+    </div>
+
+    <!-- BANK OPENING BALANCES -->
+    <div class="card">
+      <h3>🏦 Bank Opening Balances</h3>
+      <div class="grid">
+        <div><label>BOM</label><input id="open0" type="number"></div>
+        <div><label>HDFC</label><input id="open1" type="number"></div>
+        <div><label>Kotak</label><input id="open2" type="number"></div>
+        <div><label>Janta</label><input id="open3" type="number"></div>
+      </div>
+    </div>
+
+    <!-- EXPENSES -->
+    <div class="card">
+      <h3>📝 Expenses</h3>
+      <input type="date" id="edate">
+      <select id="ecat">
+        <option>Food</option>
+        <option>Travel</option>
+        <option>Bills</option>
+        <option>Entertainment</option>
+        <option>Other</option>
+      </select>
+      <select id="ebank">
+        <option value="0">BOM</option>
+        <option value="1">HDFC</option>
+        <option value="2">Kotak</option>
+        <option value="3">Janta</option>
+      </select>
+      <input id="eamount" type="number" placeholder="Amount ₹">
+      <button onclick="addExpense()">Add Expense</button>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Category</th>
+            <th>Bank</th>
+            <th>₹</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="etable"></tbody>
+      </table>
+    </div>
+
+    <!-- SAVINGS -->
+    <div class="card">
+      <h3>💰 Savings</h3>
+      <input type="date" id="sdate">
+      <select id="sbank">
+        <option value="0">BOM</option>
+        <option value="1">HDFC</option>
+        <option value="2">Kotak</option>
+        <option value="3">Janta</option>
+      </select>
+      <input id="samount" type="number" placeholder="Amount ₹">
+      <button onclick="addSaving()">Add Saving</button>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Bank</th>
+            <th>₹</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="stable"></tbody>
+      </table>
+    </div>
+
+    <!-- CHARTS -->
+    <div class="grid">
+      <div class="card"><canvas id="pieChart"></canvas></div>
+      <div class="card"><canvas id="barChart"></canvas></div>
+      <div class="card"><canvas id="bankChart"></canvas></div>
+    </div>
+
+  </div>
+
+  <script>
+    const store = JSON.parse(localStorage.getItem("finance")) || {
+      expenses: [], savingsLog: [], inputs: {}
+    };
+
+    const save = () => localStorage.setItem("finance", JSON.stringify(store));
+
+    ["income", "limit", "savings", "debt", "open0", "open1", "open2", "open3"]
+      .forEach(id => {
+        const el = document.getElementById(id);
+        el.value = store.inputs[id] || "";
+        el.oninput = () => { store.inputs[id] = el.value; save(); render(); }
+      });
+
+    let pieChartInstance, barChartInstance, bankChartInstance;
+
+    function addExpense() {
+      if (!edate.value || !eamount.value) return;
+      store.expenses.push({ d: edate.value, c: ecat.value, a: +eamount.value, b: +ebank.value });
+      edate.value = "";
+      eamount.value = "";
+      save(); render();
+    }
+
+    function addSaving() {
+      if (!sdate.value || !samount.value) return;
+      store.savingsLog.push({ d: sdate.value, a: +samount.value, b: +sbank.value });
+      store.inputs.savings = (+store.inputs.savings || 0) + +samount.value;
+      savings.value = store.inputs.savings;
+      sdate.value = "";
+      samount.value = "";
+      save(); render();
+    }
+
+    function bankBalance(bankIndex) {
+      // Get opening balance for this bank
+      const openingBalance = +(document.getElementById("open" + bankIndex).value || 0);
+
+      // Calculate total expenses from this bank (decreases balance)
+      const totalExpenses = store.expenses
+        .filter(e => e.b === bankIndex)
+        .reduce((sum, e) => sum + e.a, 0);
+
+      // Calculate total savings added to this bank (increases balance)
+      const totalSavings = store.savingsLog
+        .filter(s => s.b === bankIndex)
+        .reduce((sum, s) => sum + s.a, 0);
+
+      // Current balance = Opening - Expenses + Savings
+      return openingBalance - totalExpenses + totalSavings;
+    }
+
+    function render() {
+      etable.innerHTML = "";
+      store.expenses.forEach((e, i) => {
+        etable.innerHTML += `
+    <tr><td>${e.d}</td><td>${e.c}</td>
+    <td>${["BOM", "HDFC", "Kotak", "Janta"][e.b]}</td>
+    <td>${e.a}</td>
+    <td><button class="delete-btn" onclick="store.expenses.splice(${i},1);save();render()">🗑️</button></td></tr>`;
+      });
+
+      stable.innerHTML = "";
+      store.savingsLog.forEach((s, i) => {
+        stable.innerHTML += `
+    <tr><td>${s.d}</td>
+    <td>${["BOM", "HDFC", "Kotak", "Janta"][s.b]}</td>
+    <td>${s.a}</td>
+    <td><button class="delete-btn" onclick="store.savingsLog.splice(${i},1);save();render()">🗑️</button></td></tr>`;
+      });
+
+      drawCharts();
+    }
+
+    function drawCharts() {
+      const cat = {};
+      store.expenses.forEach(e => cat[e.c] = (cat[e.c] || 0) + e.a);
+
+      // Destroy existing charts
+      if (pieChartInstance) pieChartInstance.destroy();
+      if (barChartInstance) barChartInstance.destroy();
+      if (bankChartInstance) bankChartInstance.destroy();
+
+      // Get canvas contexts
+      const pieCtx = document.getElementById("pieChart").getContext("2d");
+      const barCtx = document.getElementById("barChart").getContext("2d");
+      const bankCtx = document.getElementById("bankChart").getContext("2d");
+
+      // Pie Chart - Expenses by Category
+      pieChartInstance = new Chart(pieCtx, {
+        type: "pie",
+        data: {
+          labels: Object.keys(cat).length > 0 ? Object.keys(cat) : ["No Data"],
+          datasets: [{
+            data: Object.keys(cat).length > 0 ? Object.values(cat) : [1],
+            backgroundColor: ['#ff6384', '#36a2eb', '#ffce56', '#4bc0c0', '#9966ff']
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            title: { display: true, text: 'Expenses by Category' }
+          }
+        }
+      });
+
+      // Bar Chart - Spent vs Remaining
+      const spent = store.expenses.reduce((s, e) => s + e.a, 0);
+      const limitVal = +limit.value || 0;
+      const remaining = limitVal - spent;
+
+      barChartInstance = new Chart(barCtx, {
+        type: "bar",
+        data: {
+          labels: ["Spent", "Remaining"],
+          datasets: [{
+            data: [spent, remaining],
+            backgroundColor: ['#eb5757', '#6fcf97']
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            title: { display: true, text: 'Budget Overview' }
+          },
+          scales: {
+            y: { beginAtZero: true }
+          }
+        }
+      });
+
+      // Bank Balance Chart
+      const bankBalances = [0, 1, 2, 3].map(bankBalance);
+
+      bankChartInstance = new Chart(bankCtx, {
+        type: "bar",
+        data: {
+          labels: ["BOM", "HDFC", "Kotak", "Janta"],
+          datasets: [{
+            label: 'Current Balance ₹',
+            data: bankBalances,
+            backgroundColor: ['#36a2eb', '#ff6384', '#ffce56', '#4bc0c0']
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            title: { display: true, text: 'Bank Balances' }
+          },
+          scales: {
+            y: { beginAtZero: true }
+          }
+        }
+      });
+    }
+
+    render();
+  </script>
+</body>
+
+</html>
